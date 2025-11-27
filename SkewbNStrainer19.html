@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SKEWB NS Trainer</title>
+<style>
+  body {
+    font-family: 'Arial', sans-serif;
+    background: linear-gradient(135deg, #ff4e50, #f9d423);
+    margin: 0;
+    padding: 0;
+    color: #fff;
+    user-select: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+  }
+  h1 {
+    margin-top: 20px;
+    font-size: 2em;
+    text-shadow: 2px 2px 5px #000;
+    text-align: center;
+  }
+  .page {
+    width: 90%;
+    max-width: 600px;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+  }
+  .active {
+    display: flex;
+  }
+  #scramble-container {
+    background: rgba(0,0,0,0.4);
+    padding: 15px 25px;
+    border-radius: 12px;
+    margin: 20px 0;
+    text-align: center;
+    width: 100%;
+  }
+  #scramble {
+    font-size: 1.2em;
+    letter-spacing: 0.15em;
+    font-weight: bold;
+  }
+  #timer-display {
+    font-size: 2em;
+    font-weight: bold;
+    margin: 15px 0;
+    color: #ff3333;
+    text-shadow: 1px 1px 5px #000;
+  }
+  button {
+    cursor: pointer;
+    border: none;
+    transition: 0.3s;
+  }
+  #times-list {
+    background: rgba(0,0,0,0.3);
+    padding: 10px;
+    border-radius: 12px;
+    margin-top: 10px;
+    width: 100%;
+    overflow-y: auto;
+    max-height: 400px;
+  }
+  .scramble-block {
+    margin-bottom: 8px;
+  }
+  .scramble-title {
+    font-weight: bold;
+    font-size: 0.9em;
+    margin-bottom: 2px;
+  }
+  .time-item {
+    margin: 1px 0;
+    padding: 3px 6px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 5px;
+    font-size: 0.85em;
+    display: flex;
+    justify-content: space-between;
+  }
+  #author { 
+    margin-top: 10px; 
+    font-size: 0.8em; 
+    color: #fff; 
+    text-shadow: 1px 1px 3px #000; 
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<h1>SKEWB NS Trainer</h1>
+
+<!-- Página principal -->
+<div id="main-page" class="page active">
+  <div id="scramble-container">
+    <div id="scramble">Toca la pantalla para iniciar el timer</div>
+  </div>
+  <div id="timer-display">0.000s</div>
+
+  <!-- Botón icono para ir a historial, colocado en la mitad inferior -->
+  <div style="margin-top: 50vh; display: flex; justify-content: center; width: 100%;">
+    <button id="go-history-btn" style="
+        font-size: 2em; 
+        padding: 12px 12px; 
+        border-radius: 50%; 
+        background-color: #ffcc00; 
+        color: #000; 
+        box-shadow: 2px 2px 8px #000;
+    ">🕒</button>
+  </div>
+</div>
+
+<!-- Página de historial -->
+<div id="history-page" class="page">
+  <button id="back-btn" style="
+      font-size: 1em; 
+      padding: 6px 12px; 
+      border-radius: 8px; 
+      background-color: #3498db; 
+      color: #fff;
+      margin-bottom: 10px;
+  ">⬅ Volver al Timer</button>
+  <div id="times-list">
+    <h3>Tiempos guardados</h3>
+  </div>
+</div>
+
+<div id="author">Hecho por Yerik Samuel Bocanegra Osorio</div>
+
+<script>
+/* --- Scrambles iniciales --- */
+let initialScrambles = [
+  "L' B R' B R U R' U' R U R'U'",
+  "U' L' R B R' L' B' R B' R' L",
+  "L R' L' B U' L U L' U B'",
+  "B' U B' L' R L' B U' R'",
+  "L' U B' L U R B' L U",
+  "L' R' B L' R B R B'",
+  "B U' B R L' R B' U L"
+];
+
+/* --- LocalStorage --- */
+let storedScrambles = JSON.parse(localStorage.getItem('scrambles')) || [];
+let scrambles = [...initialScrambles, ...storedScrambles];
+
+/* --- Variables de timer --- */
+let currentScramble = '';
+let timerRunning = false;
+let startTime = 0;
+let timerInterval;
+let times = {};
+let lastScrambles = [];
+let maxRepeats = 3;
+
+/* --- Generar scramble aleatorio con probabilidad uniforme y máximo 3 repeticiones --- */
+function generarScramble() {
+  if(scrambles.length === 0) return;
+  let nuevoScramble;
+  let intento = 0;
+  do {
+    const randomIndex = Math.floor(Math.random() * scrambles.length);
+    nuevoScramble = scrambles[randomIndex];
+    intento++;
+  } while (lastScrambles.length >= maxRepeats && lastScrambles.slice(-maxRepeats).every(s => s === nuevoScramble) && intento < 50);
+  
+  currentScramble = nuevoScramble;
+  document.getElementById('scramble').textContent = currentScramble.split(' ').join(' ');
+
+  lastScrambles.push(currentScramble);
+  if(lastScrambles.length > maxRepeats) lastScrambles.shift();
+}
+
+/* --- Guardar tiempo --- */
+function guardarTiempo(scramble, tiempo) {
+  if(!times[scramble]) times[scramble] = [];
+  times[scramble].push(tiempo);
+  actualizarLista();
+}
+
+/* --- Actualizar lista de tiempos --- */
+function actualizarLista() {
+  const container = document.getElementById('times-list');
+  container.innerHTML = "<h3>Tiempos guardados</h3>";
+  for(let scramble in times) {
+    const block = document.createElement('div');
+    block.className = 'scramble-block';
+    
+    const title = document.createElement('div');
+    title.className = 'scramble-title';
+    title.textContent = `Scramble: ${scramble}`;
+    block.appendChild(title);
+    
+    times[scramble].forEach(t => {
+      const div = document.createElement('div');
+      div.className = 'time-item';
+      div.textContent = `${t}s`;
+      block.appendChild(div);
+    });
+
+    container.appendChild(block);
+  }
+}
+
+/* --- Timer táctil --- */
+function toggleTimer() {
+  const display = document.getElementById('timer-display');
+  if(!currentScramble) {
+    generarScramble();
+  }
+
+  if(!timerRunning) {
+    startTime = Date.now();
+    timerRunning = true;
+    display.style.color = "#00ff00";
+    timerInterval = setInterval(() => {
+      let elapsed = ((Date.now() - startTime)/1000).toFixed(3);
+      display.textContent = elapsed + "s";
+    }, 10);
+  } else {
+    clearInterval(timerInterval);
+    let elapsed = ((Date.now() - startTime)/1000).toFixed(3);
+    timerRunning = false;
+    display.textContent = elapsed + "s";
+    display.style.color = "#ff3333";
+    guardarTiempo(currentScramble, elapsed);
+    generarScramble();
+  }
+}
+
+/* --- Navegación entre páginas --- */
+const mainPage = document.getElementById('main-page');
+const historyPage = document.getElementById('history-page');
+document.getElementById('go-history-btn').addEventListener('click', () => {
+  mainPage.classList.remove('active');
+  historyPage.classList.add('active');
+  actualizarLista();
+});
+document.getElementById('back-btn').addEventListener('click', () => {
+  historyPage.classList.remove('active');
+  mainPage.classList.add('active');
+});
+
+/* --- Detectar toque en pantalla para timer --- */
+document.body.addEventListener('click', (e) => {
+  if(e.target.tagName !== "BUTTON") {
+    toggleTimer();
+  }
+});
+
+/* --- Generar scramble inicial --- */
+window.onload = generarScramble;
+
+</script>
+</body>
+</html>
